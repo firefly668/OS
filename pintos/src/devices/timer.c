@@ -268,6 +268,10 @@ real_time_delay (int64_t num, int32_t denom)
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
+<<<<<<< HEAD
 static bool unblocked_tick_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
+=======
+bool unblocked_tick_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
+>>>>>>> wy
   return list_entry(a,struct thread,elem)->unblocked_tick < list_entry(b,struct thread,elem)->unblocked_tick;
 }
