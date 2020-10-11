@@ -66,16 +66,10 @@ sema_down (struct semaphore *sema)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-<<<<<<< HEAD
-  while (sema->value == 0) 
-    {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
-=======
   struct thread *t = thread_current();
   while (sema->value == 0) 
     {
       list_insert_ordered(&sema->waiters,&t->elem,(list_less_func*)&priority_cmp,NULL);
->>>>>>> wy
       thread_block ();
     }
   sema->value--;
@@ -120,12 +114,6 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-<<<<<<< HEAD
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
-  sema->value++;
-=======
   if (!list_empty (&sema->waiters)){
     list_sort(&sema->waiters,priority_cmp,NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
@@ -135,7 +123,6 @@ sema_up (struct semaphore *sema)
   
   thread_yield();
 
->>>>>>> wy
   intr_set_level (old_level);
 }
 
@@ -312,10 +299,6 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
-<<<<<<< HEAD
-  
-=======
->>>>>>> wy
   sema_init (&waiter.semaphore, 0);
   list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
@@ -338,21 +321,14 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-<<<<<<< HEAD
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
-=======
-  if (!list_empty (&cond->waiters)){
+ if (!list_empty (&cond->waiters)){
     list_sort(&cond->waiters,priority_cond_cmp,NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
   }
->>>>>>> wy
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
-   LOCK).  LOCK must be held before calling this function.
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
@@ -366,12 +342,9 @@ cond_broadcast (struct condition *cond, struct lock *lock)
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
 }
-<<<<<<< HEAD
-=======
 bool priority_cond_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
   struct semaphore_elem *s1 = list_entry(a,struct semaphore_elem,elem);
   struct semaphore_elem *s2 = list_entry(b,struct semaphore_elem,elem);
   return list_entry(list_begin(&s1->semaphore.waiters),struct thread,elem)->priority > 
   list_entry(list_begin(&s2->semaphore.waiters),struct thread,elem)->priority;
 }
->>>>>>> wy

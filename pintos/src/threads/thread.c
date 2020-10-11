@@ -69,10 +69,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-<<<<<<< HEAD
-static bool priority_cmp(const struct list_elem *a,const struct list_elem*b,void*aux);
-=======
->>>>>>> wy
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -202,15 +198,10 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-<<<<<<< HEAD
   if(thread_current()->priority < priority){
     thread_yield();
   }
-
-=======
-
   thread_yield();
->>>>>>> wy
   return tid;
 }
 
@@ -342,25 +333,15 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-<<<<<<< HEAD
-/* Sets the current thread's priority to NEW_PRIORITY. */
-=======
 /* Sets the current thread's priority to NEW_PRIORITY.
    如果降低优先级之后，等待队列中存在比自己优先级更高的线程，那么自己让出位置 */
->>>>>>> wy
 void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-<<<<<<< HEAD
-=======
-
-
->>>>>>> wy
   thread_yield();
 }
 
-/* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
@@ -600,11 +581,7 @@ allocate_tid (void)
 
   return tid;
 }
-<<<<<<< HEAD
-static bool priority_cmp(const struct list_elem *a,const struct list_elem*b,void*aux){
-=======
 bool priority_cmp(const struct list_elem *a,const struct list_elem*b,void*aux){
->>>>>>> wy
   return list_entry(a,struct thread,elem)->priority > list_entry(b,struct thread,elem)->priority;
 }
 /* Offset of `stack' member within `struct thread'.
