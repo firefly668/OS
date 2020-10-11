@@ -7,7 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+#include "lib/kernel/list.h"
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -24,12 +24,17 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+/*储存所有调用timer_sleep()函数且未被unblcok的线程.
+  当线程经过了n个tick后，从该队列中移除.
+*/
+static struct list blocked_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-
+static bool unblocked_tick_cmp(const struct list_elem *a,const struct list_elem *b,void *aux);
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +42,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init (&blocked_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -60,7 +66,7 @@ timer_calibrate (void)
   /* Refine the next 8 bits of loops_per_tick. */
   high_bit = loops_per_tick;
   for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
-    if (!too_many_loops (high_bit | test_bit))
+    if (!too_many_loops (loops_per_tick | test_bit))
       loops_per_tick |= test_bit;
 
   printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
@@ -89,11 +95,17 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  //当输入的ticks小于等于0时，直接返回
+  if(ticks<=0)
+    return;
+  //下面操作不能被中断打断.
+  enum intr_level old_level = intr_disable();
+  struct thread *t = thread_current();
+  t->unblocked_tick = timer_ticks()+ticks; 
+  list_insert_ordered(&blocked_list,&t->elem,(list_less_func*)&unblocked_tick_cmp,NULL);
+  thread_block();
+  intr_set_level(old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +184,18 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  struct list_elem *e;
+  while(list_size(&blocked_list)){
+    e = list_begin(&blocked_list);
+    struct thread*t = list_entry(e,struct thread,elem);
+    if(t->unblocked_tick<=ticks){
+      list_pop_front(&blocked_list);
+      thread_unblock(t);
+    }
+    else{
+      break;
+    }
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -243,4 +267,7 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
+}
+static bool unblocked_tick_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
+  return list_entry(a,struct thread,elem)->unblocked_tick < list_entry(b,struct thread,elem)->unblocked_tick;
 }

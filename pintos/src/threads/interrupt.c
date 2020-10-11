@@ -88,6 +88,7 @@ enum intr_level
 intr_enable (void) 
 {
   enum intr_level old_level = intr_get_level ();
+  //必须判断当前没有外中断正在进行，因为外中断进行的时候必须屏蔽中断.
   ASSERT (!intr_context ());
 
   /* Enable interrupts by setting the interrupt flag.
