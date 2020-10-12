@@ -338,8 +338,16 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  thread_yield();
+  if(thread_mlfqs) return;
+
+  enum intr_level old_level = intr_disable();
+  struct thread* t = thread_current();
+  t->original_priority = new_priority;
+  if(list_empty(&t->locks) || new_priority>t->priority){
+    t->priority=new_priority;
+    thread_yield();
+  }
+  intr_set_level(old_level);
 }
 
 int
@@ -465,6 +473,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->original_priority = priority; 
+  list_init(&(t->locks));
+  t->lock_waiting_for=NULL;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -587,3 +598,4 @@ bool priority_cmp(const struct list_elem *a,const struct list_elem*b,void*aux){
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+

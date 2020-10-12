@@ -51,3 +51,4 @@ priority_condvar_thread (void *aux UNUSED)
   msg ("Thread %s woke up.", thread_name ());
   lock_release (&lock);
 }
+
