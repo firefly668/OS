@@ -20,6 +20,8 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+fixed_t load_avg;/* */
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -103,6 +105,8 @@ thread_init (void)
 void
 thread_start (void) 
 {
+  /*initalize load_avg*/
+  load_avg = CONVERT_TO_FIXED(0);
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
@@ -180,6 +184,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->nice=0;
+  t->recent_cpu=CONVERT_TO_FIXED(0);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -361,6 +367,10 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* Not yet implemented. */
+  struct thread *t=thread_current();
+  t->nice=nice;
+  update_priority(t,NULL);
+  thread_yield();
 }
 
 /* Returns the current thread's nice value. */
@@ -368,7 +378,7 @@ int
 thread_get_nice (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -376,7 +386,7 @@ int
 thread_get_load_avg (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return CONVERT_TO_INT_ROUND_NEAR(MUL_FIXED_INT(load_avg,100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -384,7 +394,7 @@ int
 thread_get_recent_cpu (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return CONVERT_TO_INT_ROUND_NEAR(MUL_FIXED_INT(thread_current()->recent_cpu,100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.

@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "threads/fixed_point.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -95,6 +95,8 @@ struct thread
     
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    int nice;
+    fixed_t recent_cpu;
 
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
 

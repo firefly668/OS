@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/thread.c"
 #include "lib/kernel/list.h"
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -177,12 +178,69 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
+/*load_avg = (59/60)*load_avg + (1/60)*ready_threads.*/
+void
+update_load_avg()
+{
+  int ready_threads_num=(int)(list_size(&ready_list));
+  struct thread *t=thread_current();
+  if(t!=idle_thread && t!=NULL)
+  {
+    ready_threads_num++;
+  }
+  int64_t factor1=MUL_FIXED_INT(load_avg,59);
+  fixed_t factor2=DIV_FIXED_INT(factor1,60);
+  fixed_t factor3=DIV_FIXED_INT(CONVERT_TO_FIXED(ready_threads_num),60);
+  load_avg=ADD_TWO_FIXED(factor2,factor3);
+}
+
+/*recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice***/
+void
+update_recent_cpu(struct thread *t,void *aux UNUSED)
+{
+  if(t!=idle_thread)
+    t->recent_cpu=ADD_FIXED_INT(MUL_TWO_FIXED(DIV_TWO_FIXED(MUL_FIXED_INT(load_avg,2),ADD_FIXED_INT(MUL_FIXED_INT(load_avg,2),1)),t->recent_cpu),t->nice);
+}
+
+/*priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)*/
+void
+update_priority(struct thread *t,void *aux UNUSED)
+{
+  t->priority=CONVERT_TO_INT_ROUND_NEAR(CONVERT_TO_FIXED(PRI_MAX)-DIV_FIXED_INT(t->recent_cpu,4)-CONVERT_TO_FIXED((t->nice)*2));
+  if(t->priority<PRI_MIN)
+    t->priority=PRI_MIN;
+  if(t->priority>PRI_MAX)
+    t->priority=PRI_MAX;
+}
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  if(thread_mlfqs)
+  {
+    struct thread *cur = thread_current();
+    /*per timer interrupt, recent cpu is incremented by 1 for
+      the running thread, except the idle thread.*/
+    if(cur != idle_thread)
+    {
+      cur->recent_cpu = ADD_FIXED_INT(cur->recent_cpu,1);
+    }
+    
+    /* per second, every thread’s recent cpu is updated */
+    if(ticks % TIMER_FREQ == 0)
+    {
+      update_load_avg();
+      thread_foreach(update_recent_cpu,NULL);
+    }
+    /* every fourth tick: priority = PRI_MAX - (recent_cpu / 4) - (nice * 2).  */
+    if(ticks % 4 == 0)
+    {
+      thread_foreach(update_priority,NULL);
+    }
+  }
+  
   thread_tick ();
   struct list_elem *e;
   while(list_size(&blocked_list)){
