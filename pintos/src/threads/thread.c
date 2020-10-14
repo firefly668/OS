@@ -609,3 +609,47 @@ bool priority_cmp(const struct list_elem *a,const struct list_elem*b,void*aux){
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+void
+add_one_to_recent_cpu()
+{
+  struct thread *t=thread_current();
+  if(t != idle_thread)
+    {
+      t->recent_cpu = ADD_FIXED_INT(t->recent_cpu,1);
+    }
+}
+
+/*load_avg = (59/60)*load_avg + (1/60)*ready_threads.*/
+void
+update_load_avg()
+{
+  int ready_threads_num=(int)(list_size(&ready_list));
+  struct thread *t=thread_current();
+  if(t!=idle_thread && t!=NULL)
+  {
+    ready_threads_num++;
+  }
+  int64_t factor1=MUL_FIXED_INT(load_avg,59);
+  fixed_t factor2=DIV_FIXED_INT(factor1,60);
+  fixed_t factor3=DIV_FIXED_INT(CONVERT_TO_FIXED(ready_threads_num),60);
+  load_avg=ADD_TWO_FIXED(factor2,factor3);
+}
+
+/*recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice***/
+void
+update_recent_cpu(struct thread *t,void *aux UNUSED)
+{
+  if(t!=idle_thread)
+    t->recent_cpu=ADD_FIXED_INT(MUL_TWO_FIXED(DIV_TWO_FIXED(MUL_FIXED_INT(load_avg,2),ADD_FIXED_INT(MUL_FIXED_INT(load_avg,2),1)),t->recent_cpu),t->nice);
+}
+
+/*priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)*/
+void
+update_priority(struct thread *t,void *aux UNUSED)
+{
+  t->priority=CONVERT_TO_INT_ROUND_NEAR(CONVERT_TO_FIXED(PRI_MAX)-DIV_FIXED_INT(t->recent_cpu,4)-CONVERT_TO_FIXED((t->nice)*2));
+  if(t->priority<PRI_MIN)
+    t->priority=PRI_MIN;
+  if(t->priority>PRI_MAX)
+    t->priority=PRI_MAX;
+}
