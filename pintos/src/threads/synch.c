@@ -215,7 +215,7 @@ lock_acquire (struct lock *lock)
 
   //递归捐赠
   old_level = intr_disable();//递归太慢了！！！！会导致时间片用完，必须加intr_disable()
-  if(lock->holder !=NULL && !thread_mlfqs){
+  if(lock->holder !=NULL && t->priority > lock->max_priority && !thread_mlfqs){
     t->lock_waiting_for = lock;
     donation(lock,t);
   }
@@ -228,6 +228,7 @@ lock_acquire (struct lock *lock)
   lock->holder = thread_current ();
   if(!thread_mlfqs){
     t->lock_waiting_for=NULL;
+    lock->max_priority=t->priority;
     list_insert_ordered(&t->locks,&lock->elem,priority_lock_cmp,NULL);
   }
   intr_set_level(old_level);
