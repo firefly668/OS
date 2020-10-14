@@ -74,6 +74,7 @@ pit_configure_channel (int channel, int mode, int frequency)
   else
     count = (PIT_HZ + frequency / 2) / frequency;
 
+
   /* Configure the PIT mode and load its counters. */
   old_level = intr_disable ();
   outb (PIT_PORT_CONTROL, (channel << 6) | 0x30 | (mode << 1));

@@ -4,7 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -88,13 +87,23 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int init_priority;                  /* 当线程没有拥有的锁的时候，其对应的优先级应该是其创建线程时的优先级
+                                        或者是其通过set_prioriy()设置的优先级。当线程优先级拥有锁时，其优先级
+                                        可能发生变化，init_priority主要帮助我们回到之前的优先级。 */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
 
+    struct list held_locks;             /* 保存该线程拥有多少个锁，我们的策略是该线程的优先级必须是其拥有的锁
+                                        中优先级最高的锁所对应的优先级.锁所对应的优先级应该是所有想要获得该锁
+                                        的线程中优先级最高的线程所拥有的优先级。为此我们可以为线程添加一个其
+                                        拥有锁的List,也可以为锁添加一个想要获取其的线程的队列。*/
+    struct lock *lock_waiting_for;
+
+    int nice;                          /* 一个线程拥有的nice值 */
+    int recent_cpu;                    /*  一个线程拥有的recent_cpu值*/
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -134,6 +143,8 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+void thread_donate_priority(struct thread *t); /* 捐赠优先级 */
+
 
 int thread_get_nice (void);
 void thread_set_nice (int);

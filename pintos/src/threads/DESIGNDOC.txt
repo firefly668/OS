@@ -29,23 +29,30 @@ FirstName LastName <email@domain.example>
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+1.static struct list blocked_list;
+储存所有调用timer_sleep()函数且未被unblock的线程,当线程"休眠"了n个tick之后，从该队列中移除。
 
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
-
+当传入给timer_sleep()函数的参数小于等于0时,函数直接返回。否则，记录线程应该在哪个tick苏醒.(利用全局变量ticks.)然后将线程放入上述定义的
+blocked_list里面，并调用thread_block()阻塞线程。
+每过一个tick便会触发一个时钟中断。在时钟中断里，我们获取当前的ticks数，然后将blocked_list扫一遍。如果当前的ticks数大于等于线程苏醒的ticks，
+我们便把线程从blocked_list中移除，并且调用thread_unblock()函数解除线程的阻塞态。
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
-
+我们在将线程插入blcoked_list时是利用list_insert_ordered函数有序插入的。这样保证blcoked_list中的线程是按照苏醒ticks的从小到大排序的。
+当我们在timer interrupt handler中遍历blocked_list时，我们不用完整的遍历，当我们一旦遍历到苏醒时间比当前ticks大的线程时，即可break。
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
-
+当某一个线程进入timer_sleep函数进入timer_sleep()函数之后，会调用intr_disable()函数屏蔽中断，其他线程调用该函数必须是要在Intr_on的情况下调用，
+故避免了资源竞争的问题。
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
-
+当某一个线程进入timer_sleep函数进入timer_sleep()函数之后，会调用intr_disable()函数屏蔽中断，保证操作的原子性。
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to

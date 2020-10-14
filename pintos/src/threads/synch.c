@@ -31,7 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-
+#include <kernel/list.h>
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -98,7 +98,6 @@ sema_try_down (struct semaphore *sema)
   else
     success = false;
   intr_set_level (old_level);
-
   return success;
 }
 
@@ -182,7 +181,7 @@ void
 lock_init (struct lock *lock)
 {
   ASSERT (lock != NULL);
-
+  lock->lock_priority=-1;
   lock->holder = NULL;
   sema_init (&lock->semaphore, 1);
 }
@@ -194,18 +193,35 @@ lock_init (struct lock *lock)
    This function may sleep, so it must not be called within an
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
-   we need to sleep. */
+   we need to sleep. 
+   在接收锁的同时，如果执行该函数的线程的优先级比目前的lock_holder的优先级高，我们应该将当前线程的优先级给lock_holder
+   根据priority_inversion，当lock_release后，我们应该撤回我们对之前的donation。*/
 void
 lock_acquire (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
+  enum intr_level old_level = intr_disable ();
+  struct thread *t = thread_current();
+  struct lock *tem;
+  int lever=0;
+  if(lock->holder!=NULL){
+    t->lock_waiting_for = lock;
+    tem = lock;
+    while(tem != NULL && t->priority > tem->lock_priority && lever<max_lever){
+      tem->lock_priority = t->priority;
+      thread_donate_priority(tem->holder);
+      tem = tem->holder->lock_waiting_for;
+      lever++;
+    }
+  }
   sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  lock->lock_priority = t->priority;
+  list_push_back(&t->held_locks,&lock->elem);
+  lock->holder = t;
+  intr_set_level (old_level);
 }
-
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
    thread.
@@ -236,9 +252,24 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
+  enum intr_level old_level = intr_disable ();
+  list_remove(&lock->elem);
+  struct thread *t = thread_current();
+  /* 下面要更新该线程的优先级，如果该线程拥有的锁队列为空,则将该线程的优先级置为init_priority。如果不为空，那么就将该线程的优先级置为剩余锁中最大的
+  的优先级,如果剩下锁中的最大优先级小于init_priorty，则直接把priority置为init_priority*/
+  if(list_size(&t->held_locks)){
+    list_sort(&t->held_locks,priority_lock_cmp,NULL);
+    if(t->init_priority<=list_entry(list_begin(&t->held_locks),struct lock,elem)->lock_priority)
+      t->priority = list_entry(list_begin(&t->held_locks),struct lock,elem)->lock_priority;
+    else
+      t->priority = t->init_priority;
+  }
+  else{
+    t->priority = t->init_priority;
+  }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  intr_set_level (old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -251,7 +282,9 @@ lock_held_by_current_thread (const struct lock *lock)
 
   return lock->holder == thread_current ();
 }
-
+bool priority_lock_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
+  return list_entry(a,struct lock,elem)->lock_priority > list_entry(b,struct lock,elem)->lock_priority;
+}
 /* One semaphore in a list. */
 struct semaphore_elem 
   {
