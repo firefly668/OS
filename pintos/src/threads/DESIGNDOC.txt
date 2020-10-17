@@ -94,6 +94,37 @@ FirstName LastName <email@domain.example>
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+1.struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority after donation */
+    int original_priority;              /* Priority before donation*/
+    struct list_elem allelem;           /* List element for all threads list. */
+    struct lock* lock_waiting_for;      /*该线程所等待的锁*/
+    struct list locks;                  /*该线程所拥有的锁*/
+    
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+    int nice;
+    fixed_t recent_cpu;
+
+    int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
+
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+  };
+按照文档描述在thread结构体中增加nice和recent_cpu供之后的计算使用
+2.fixed_t load_avg
+按照文档描述增加全局变量load_avg,供之后计算使用
 
 ---- ALGORITHMS ----
 
@@ -105,21 +136,23 @@ FirstName LastName <email@domain.example>
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0      0   0   0  63  61  59        A
+ 4      4   0   0  62  61  59        A
+ 8      8   0   0  61  61  59        A
+12     12   0   0  60  61  59        B
+16     12   4   0  60  60  59        B
+20     12   8   0  60  59  59        A
+24     16   8   0  59  59  59        A
+28     20   8   0  58  59  59        B
+32     20  12   0  58  58  59        C
+36     20  12   4  58  58  58        C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
-
+如果优先级最高的线程的优先级降低后与别的线程优先级相等，那么接下来运行的线程如何选择？这在文档中没有描述。
+在我们的程序中，如果优先级最高的线程优先级更改后会yield，加入ready_list中
+时我们使用list_insert_ordered函数，如果有线程优先级相等的情况，新加入的线程会排在已有的与其优先级相等的线程的前面。
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
@@ -129,13 +162,16 @@ ticks   A   B   C   A   B   C   to run
 >> disadvantages in your design choices.  If you were to have extra
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
-
+我们复用了任务2中的队列，而没有按照文档中所提到的使用64个不同优先级的队列。缺点是在线程更新优先级后的插入时间复杂度为O(n),而使用64个不同优先级的队列插入时的时间复杂度为O(1).优点是节省了空间。
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+我们使用了宏定义来进行fixed-point数字的计算，这样做的原因是
+1.数字的加减乘除操作用到的地方比较多，每次都直接进行计算会使代码繁琐，逻辑也不清晰
+2.数字的加减乘除操作需要完成的操作比较少，如果使用函数，在函数调用时要保存调用函数的现场，执行完后又要恢复调用函数的现场，频繁的加减乘除操作带来的开销就比较大，如果采用宏定义，在预处理阶段即进行了展开，在执行时不需要转换。
 
                SURVEY QUESTIONS
                ================
