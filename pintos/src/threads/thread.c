@@ -37,7 +37,7 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
+bool threading_started = false;
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -106,6 +106,7 @@ void
 thread_start (void) 
 {
   /*initalize load_avg*/
+  threading_started=true;
   load_avg = CONVERT_TO_FIXED(0);
   /* Create the idle thread. */
   struct semaphore idle_started;
@@ -309,6 +310,8 @@ thread_exit (void)
 void
 thread_yield (void) 
 {
+  if(!threading_started)
+    return;
   struct thread *cur = thread_current ();
   enum intr_level old_level;
   
