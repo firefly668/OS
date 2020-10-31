@@ -123,7 +123,10 @@ start_process (void *orders_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+    enum intr_level old_level;
+    old_level = intr_disable ();
+    thread_block();
+    intr_set_level (old_level);
 }
 
 /* Free the current process's resources. */
