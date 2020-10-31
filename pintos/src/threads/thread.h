@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "threads/fixed_point.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -23,7 +23,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
+extern bool threading_started;
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -95,9 +95,12 @@ struct thread
     
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    int nice;
+    fixed_t recent_cpu;
 
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
 
+    int ret;                            /*退出信息*/
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -144,4 +147,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 bool priority_cmp(const struct list_elem *a,const struct list_elem *b,void *aux);
 bool priority_lock_cmp(const struct list_elem *a,const struct list_elem *b,void *aux);
+void add_one_to_recent_cpu(void);
+void update_load_avg (void);
+void update_recent_cpu (struct thread *,void *);
+void update_priority (struct thread *,void *);
 #endif /* threads/thread.h */
+

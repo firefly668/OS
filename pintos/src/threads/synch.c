@@ -66,9 +66,10 @@ sema_down (struct semaphore *sema)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+  struct thread *t = thread_current();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered(&sema->waiters,&t->elem,(list_less_func*)&priority_cmp,NULL);
       thread_block ();
     }
   sema->value--;
@@ -113,10 +114,15 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
+  if (!list_empty (&sema->waiters)){
+    list_sort(&sema->waiters,priority_cmp,NULL);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+  } 
   sema->value++;
+  if(!intr_context())
+    thread_yield();
+
   intr_set_level (old_level);
 }
 
@@ -209,7 +215,7 @@ lock_acquire (struct lock *lock)
 
   //递归捐赠
   old_level = intr_disable();//递归太慢了！！！！会导致时间片用完，必须加intr_disable()
-  if(lock->holder !=NULL && !thread_mlfqs){
+  if(lock->holder !=NULL && t->priority > lock->max_priority && !thread_mlfqs){
     t->lock_waiting_for = lock;
     donation(lock,t);
   }
@@ -222,6 +228,7 @@ lock_acquire (struct lock *lock)
   lock->holder = thread_current ();
   if(!thread_mlfqs){
     t->lock_waiting_for=NULL;
+    lock->max_priority=t->priority;
     list_insert_ordered(&t->locks,&lock->elem,priority_lock_cmp,NULL);
   }
   intr_set_level(old_level);
@@ -359,13 +366,14 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
+ if (!list_empty (&cond->waiters)){
+    list_sort(&cond->waiters,priority_cond_cmp,NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
-   LOCK).  LOCK must be held before calling this function.
 
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an

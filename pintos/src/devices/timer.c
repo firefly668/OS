@@ -177,12 +177,32 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  if(thread_mlfqs)
+  {
+    struct thread *cur = thread_current();
+    /*per timer interrupt, recent cpu is incremented by 1 for
+      the running thread, except the idle thread.*/
+    add_one_to_recent_cpu();
+    /* per second, every thread’s recent cpu is updated */
+    if(ticks % TIMER_FREQ == 0)
+    {
+      update_load_avg();
+      thread_foreach(update_recent_cpu,NULL);
+    }
+    /* every fourth tick: priority = PRI_MAX - (recent_cpu / 4) - (nice * 2).  */
+    if(ticks % 4 == 0)
+    {
+      thread_foreach(update_priority,NULL);
+    }
+  }
+  
   thread_tick ();
   struct list_elem *e;
   while(list_size(&blocked_list)){
@@ -268,6 +288,6 @@ real_time_delay (int64_t num, int32_t denom)
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
-static bool unblocked_tick_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
+bool unblocked_tick_cmp(const struct list_elem *a,const struct list_elem *b,void *aux){
   return list_entry(a,struct thread,elem)->unblocked_tick < list_entry(b,struct thread,elem)->unblocked_tick;
 }

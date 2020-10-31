@@ -26,34 +26,37 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *orders) 
 {
-  char *fn_copy;
+  char *orders_copy;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  orders_copy = palloc_get_page (0);
+  if (orders_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
-
+  strlcpy (orders_copy, orders, PGSIZE);
+  char *file_name,*temp=NULL;
+  file_name = strtok_r(orders," ",&temp);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, orders_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (orders_copy); 
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *orders_)
 {
-  char *file_name = file_name_;
+  char *orders = orders_;
   struct intr_frame if_;
   bool success;
-
+  /*获取程序名称*/
+  char *file_name,*temp=NULL;
+  file_name=strtok_r(orders," ",&temp);
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -62,10 +65,41 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  palloc_free_page(orders);
   if (!success) 
     thread_exit ();
-
+  char *esp=if_.esp;
+  //参数最多128
+  char *argv[128],*token=file_name;
+  int n=0;
+  for(;token!=NULL;token=strtok_r(NULL," ",&temp)){
+    esp-=strlen(token)+1;
+    strlcpy(esp,token,strlen(token)+1);
+    argv[n++]=esp;
+  }
+  //字对齐，4的倍数
+  while((int)esp%4){
+    esp--;
+  }
+  //默认加一个0，对应文档例子里的argv[4]
+  int *p=(int *)esp;
+  *(--p)=0;
+  //将参数从右至左压入栈
+  int i;
+  for(i=n-1;i>=0;i--){
+    *(--p)=argv[i];
+  }
+  //压入argv
+  *(--p)=p+1;
+  //argc
+  *(--p)=n;
+  //return address 0
+  *(--p)=0;
+  //放入if_
+  esp=(char *)p;
+  if_.esp=esp;
+  file_deny_write(filesys_open(file_name));
+  //TODO:在线程中加入该已打开文件
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -75,6 +109,7 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
+
 
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
@@ -113,6 +148,8 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+      //TODO:通过线程查找其打开的文件,关闭
+      printf("%S:exit(%d)\n",cur->name,cur->ret);
     }
 }
 
