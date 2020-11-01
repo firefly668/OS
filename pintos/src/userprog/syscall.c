@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/shutdown.h"
 static void syscall_handler (struct intr_frame *);
 struct lock filesystem_lock;
 void
