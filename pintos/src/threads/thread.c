@@ -488,6 +488,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->original_priority = priority; 
   list_init(&(t->locks));
+  list_init(&(t->set_of_file_descriptors));
   t->lock_waiting_for=NULL;
   t->magic = THREAD_MAGIC;
   t->ret=0;

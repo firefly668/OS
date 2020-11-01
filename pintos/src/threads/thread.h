@@ -101,6 +101,7 @@ struct thread
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
 
     int ret;                            /*退出信息*/
+    struct list set_of_file_descriptors;
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
