@@ -37,10 +37,15 @@ process_execute (const char *orders)
   if (orders_copy == NULL)
     return TID_ERROR;
   strlcpy (orders_copy, orders, PGSIZE);
-  char *file_name,*temp=NULL;
-  file_name = strtok_r(orders," ",&temp);
+
+
+  char *name_copy,*next = NULL;
+  name_copy = malloc (strlen (orders) + 1);
+  strlcpy(name_copy, orders, strlen(orders) + 1);
+  name_copy = strtok_r (name_copy, " ", &next);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, orders_copy);
+  tid = thread_create (name_copy, PRI_DEFAULT, start_process, orders_copy);
   if (tid == TID_ERROR)
     palloc_free_page (orders_copy); 
   return tid;
@@ -54,51 +59,16 @@ start_process (void *orders_)
   char *orders = orders_;
   struct intr_frame if_;
   bool success;
-  /*获取程序名称*/
-  char *token,*temp=NULL;
-  token=strtok_r(orders," ",&temp);
-  /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (token, &if_.eip, &if_.esp);
+  success = load (orders, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  //palloc_free_page(orders);
+  palloc_free_page(orders);
   if (!success) 
     thread_exit ();
-  char *esp=if_.esp;
-  //参数最多128
-  char *argv[128];
-  int n=0;
-  for(;token!=NULL;token=strtok_r(NULL," ",&temp)){
-    esp-=strlen(token)+1;
-    strlcpy(esp,token,strlen(token)+2);
-    argv[n++]=esp;
-  }
-  //字对齐，4的倍数
-  while((int)esp%4){
-    esp--;
-  }
-  //默认加一个0，对应文档例子里的argv[4]
-  int *p=(int *)esp;
-  *(--p)=0;
-  //将参数从右至左压入栈
-  int i;
-  for(i=n-1;i>=0;i--){
-    *(--p)=argv[i];
-  }
-  //压入argv
-  --p;
-  *p=p+1;
-  //argc
-  *(--p)=n;
-  //return address 0
-  *(--p)=0;
-  //放入if_
-  if_.esp=esp;
-  palloc_free_page(orders);
   //file_deny_write(filesys_open(file_name));
   //TODO:在线程中加入该已打开文件
   /* Start the user process by simulating a return from an
@@ -235,7 +205,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp,const char *file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -260,9 +230,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+  
+  char *name_copy,*next = NULL;
+  name_copy = malloc (strlen (file_name) + 1);
+  strlcpy(name_copy, file_name, strlen(file_name) + 1);
+  name_copy = strtok_r (name_copy, " ", &next);
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (name_copy);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -342,7 +317,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp,file_name))
     goto done;
 
   /* Start address. */
@@ -467,7 +442,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp,const char *file_name) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -476,8 +451,51 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
         *esp = PHYS_BASE;
+        char *temp, *next = NULL;
+        int i = 0;
+        char *name_copy = malloc (strlen (file_name) + 1);
+        strlcpy (name_copy, file_name, strlen (file_name) + 1);
+        int *argv = calloc (128, sizeof(int));
+        /* Parse filename and arguments */
+        for (temp = strtok_r (name_copy, " ", &next), i = 0; temp != NULL; temp = strtok_r (NULL, " ", &next), i++)
+          {
+            *esp -= strlen (temp) + 1;
+            memcpy(*esp, temp, strlen (temp) + 1);
+
+            argv[i] = *esp;
+          }
+          /* Add '0' if not multiple of 4 */
+        while((int)*esp % 4)
+          {
+            *esp -= sizeof(char);
+            char x = 0;
+            memcpy(*esp, &x, sizeof(char));
+          }
+        int zero = 0;
+        *esp -= sizeof(int);
+        memcpy(*esp, &zero, sizeof(int));
+        /* Add addr to stack, in reverse order */
+        for(int j = i - 1; j >= 0; j--)
+          {
+            *esp -= sizeof(int);
+            memcpy(*esp, &argv[j], sizeof(int));
+          }
+        /* Save addr of esp */
+        int pt = *esp;
+        *esp -= sizeof(int);
+        memcpy(*esp, &pt, sizeof(int));
+        /* Save num of arguments */
+        *esp -= sizeof(int);
+        memcpy(*esp, &i, sizeof(int));
+        /* add zero */
+        *esp -= sizeof(int);
+        memcpy(*esp, &zero, sizeof(int));
+        /* Free after use */
+        free(name_copy);
+        free(argv);
+      }
       else
         palloc_free_page (kpage);
     }
@@ -497,7 +515,6 @@ static bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
