@@ -55,26 +55,26 @@ start_process (void *orders_)
   struct intr_frame if_;
   bool success;
   /*获取程序名称*/
-  char *file_name,*temp=NULL;
-  file_name=strtok_r(orders," ",&temp);
+  char *token,*temp=NULL;
+  token=strtok_r(orders," ",&temp);
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (token, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page(orders);
+  //palloc_free_page(orders);
   if (!success) 
     thread_exit ();
   char *esp=if_.esp;
   //参数最多128
-  char *argv[128],*token=file_name;
+  char *argv[128];
   int n=0;
   for(;token!=NULL;token=strtok_r(NULL," ",&temp)){
     esp-=strlen(token)+1;
-    strlcpy(esp,token,strlen(token)+1);
+    strlcpy(esp,token,strlen(token)+2);
     argv[n++]=esp;
   }
   //字对齐，4的倍数
@@ -90,15 +90,16 @@ start_process (void *orders_)
     *(--p)=argv[i];
   }
   //压入argv
-  *(--p)=p+1;
+  --p;
+  *p=p+1;
   //argc
   *(--p)=n;
   //return address 0
   *(--p)=0;
   //放入if_
-  esp=(char *)p;
   if_.esp=esp;
-  file_deny_write(filesys_open(file_name));
+  palloc_free_page(orders);
+  //file_deny_write(filesys_open(file_name));
   //TODO:在线程中加入该已打开文件
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -123,10 +124,9 @@ start_process (void *orders_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-    enum intr_level old_level;
-    old_level = intr_disable ();
-    thread_block();
-    intr_set_level (old_level);
+    while(true){
+
+    }
 }
 
 /* Free the current process's resources. */
@@ -152,7 +152,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
       //TODO:通过线程查找其打开的文件,关闭
-      printf("%S:exit(%d)\n",cur->name,cur->ret);
+      printf("%s:exit(%d)\n",cur->name,cur->ret);
     }
 }
 
