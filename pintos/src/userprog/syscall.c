@@ -17,10 +17,18 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  for(int i=0;i<=2000;i++)
-    printf("%dSystem Call!\n",i);
+  is_valid_addr(f->esp);
+  if(*(int *)f->esp == SYS_WRITE){
+    int parameters[10];
+    get_parameters(f,parameters,3);
+    write(parameters[0],(void *)parameters[1],(unsigned) parameters[2]);
+  }
+  else if(*(int *)f->esp == SYS_EXIT){
+    int parameters[10];
+    get_parameters(f,parameters,1);
+    exit(parameters[0]);
+  }
 }
-
 void
 is_valid_addr (const void *addr)
 {
@@ -31,7 +39,6 @@ is_valid_addr (const void *addr)
       exit (-1);
     }
 }
-
 void
 is_valid_buffer (void *buffer, unsigned size)
 {
@@ -40,7 +47,6 @@ is_valid_buffer (void *buffer, unsigned size)
   temp+=size;
   is_valid_addr ((const char *)temp);
 }
-
 int write(int fd,const void *buffer, unsigned size)
 {
     lock_acquire(&filesystem_lock);
@@ -55,22 +61,22 @@ int write(int fd,const void *buffer, unsigned size)
        lock_release(&filesystem_lock);
        return size;
     }
+    exit(-1);
 }
-
 int exit(int stauts){
   struct thread* t = thread_current();
   t->ret = stauts;
   thread_exit();
 }
-
 /*获取压到栈上的系统调用的参数
 第一个参数为中断栈帧，第二个参数为存放系统调用的参数(不能使用void*)，第三个参数为该系统调用有几个参数*/
 void get_parameters(struct intr_frame *f,int *parameters,int len)
 {
   void *tem;
   for(int i=0;i<len;i++){
-    tem = f->esp+i+1;
+    tem = (int*)f->esp+i+1;
     is_valid_addr(tem);
-    parameters[i] = (*(int*)tem);
+    parameters[i] = *(int *)tem;
+    
   }
 }
