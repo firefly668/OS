@@ -482,41 +482,38 @@ setup_stack (void **esp,const char *file_name)
         char *name_copy = malloc (strlen (file_name) + 1);
         strlcpy (name_copy, file_name, strlen (file_name) + 1);
         int *argv = calloc (128, sizeof(int));
-        /* Parse filename and arguments */
-        for (temp = strtok_r (name_copy, " ", &next), i = 0; temp != NULL; temp = strtok_r (NULL, " ", &next), i++)
-          {
-            *esp -= strlen (temp) + 1;
-            memcpy(*esp, temp, strlen (temp) + 1);
-
-            argv[i] = *esp;
-          }
-          /* Add '0' if not multiple of 4 */
-        while((int)*esp % 4)
-          {
-            *esp -= sizeof(char);
-            char x = 0;
-            memcpy(*esp, &x, sizeof(char));
-          }
+        /* 压入文件名和参数 */
+        for (temp = strtok_r (name_copy, " ", &next), i = 0; temp != NULL; temp = strtok_r (NULL, " ", &next), i++){
+          *esp -= strlen (temp) + 1;
+          memcpy(*esp, temp, strlen (temp) + 1);
+          argv[i] = *esp;
+        }
+        /* 字对齐 */
+        while((int)*esp % 4){
+          *esp -= sizeof(char);
+          char x = 0;
+          memcpy(*esp, &x, sizeof(char));
+        }
+        /*argv[argc]=0*/
         int zero = 0;
         *esp -= sizeof(int);
         memcpy(*esp, &zero, sizeof(int));
-        /* Add addr to stack, in reverse order */
-        for(int j = i - 1; j >= 0; j--)
-          {
-            *esp -= sizeof(int);
-            memcpy(*esp, &argv[j], sizeof(int));
-          }
-        /* Save addr of esp */
+        /* 从右到左，压入参数地址 */
+        for(int j = i - 1; j >= 0; j--){
+          *esp -= sizeof(int);
+          memcpy(*esp, &argv[j], sizeof(int));
+        }
+        /* 压入argv地址 */
         int pt = *esp;
         *esp -= sizeof(int);
         memcpy(*esp, &pt, sizeof(int));
-        /* Save num of arguments */
+        /* 压入参数个数 */
         *esp -= sizeof(int);
         memcpy(*esp, &i, sizeof(int));
-        /* add zero */
+        /* 添加返回地址0 */
         *esp -= sizeof(int);
         memcpy(*esp, &zero, sizeof(int));
-        /* Free after use */
+        /* 释放内存 */
         free(name_copy);
         free(argv);
       }
