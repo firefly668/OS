@@ -55,10 +55,62 @@ is_valid_buffer (void *buffer, unsigned size)
   temp+=size;
   is_valid_addr ((const char *)temp);
 }
+bool create(const char *file, unsigned initial_size){
+  lock_acquire(&filesystem_lock);
+  bool create_status = filesys_create(file,initial_size);
+  lock_release(&filesystem_lock);
+  return create_status;
+}
+bool remove(const char *file){
+  lock_acquire(&filesystem_lock);
+  bool remove_status = filesys_remove(file);
+  lock_release(&filesystem_lock);
+  return remove_status;
+}
+int filesize(int fd){
+  lock_acquire(&filesystem_lock);
+  if(fd == 1 || fd<=0){
+    lock_release(&filesystem_lock);
+    exit(-1);
+  }else{
+    struct thread *t = thread_current();
+    struct list_elem *e;
+    for(e=list_begin(&(t->set_of_file_descriptors));e!=list_end(&(t->set_of_file_descriptors));e=list_next(&(t->set_of_file_descriptors)))
+      {
+        struct file_plus *f = list_entry(e,struct file_plus,elem1);
+        if(f->fd == fd){
+          int len = (int)file_length(f->file);
+          lock_release(&filesystem_lock);
+          return len;
+        }
+      }
+  }
+}
 /*打开一份文件，然后返回该文件的fd，如果文件打开失败则返回-1.返回的fd不能是1或0。每一个process都有自己的文件描述符的集合，我的想法是创建一个列表
 ，里面存放的是一个结构体，包含了文件名和文件fd。 */
-int open(const char*file){
-
+int open(const char* filename){
+  lock_acquire(&filesystem_lock);
+  struct file* file = filesys_open(filename);
+  if(file == NULL)
+  { 
+    lock_release(&filesystem_lock);
+    return -1;
+  } 
+  else{
+    struct thread *t = thread_current();
+    struct file_plus *file_plus;
+    if(list_empty(&(t->set_of_file_descriptors))){
+      file_plus->fd = 2;
+      file_plus->file = file;
+      list_push_back(&(t->set_of_file_descriptors),file_plus);
+    }else{
+      struct list_elem *e = list_back(&(t->set_of_file_descriptors));
+      file_plus->fd = list_entry(e,struct file_plus,elem1)->fd++;
+      file_plus->file = file;
+    }
+    lock_release(&filesystem_lock);
+    return file_plus->fd;
+  }  
 }
 int read(int fd,void *buffer,unsigned size){
   lock_acquire(&filesystem_lock);
