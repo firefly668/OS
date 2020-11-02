@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/fixed_point.h"
+#include "threads/synch.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -80,6 +81,13 @@ extern bool threading_started;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+struct child 
+{
+   tid_t tid;
+   struct list_elem elem;
+   int exit_status;
+   bool is_existed;                     /* 是否曾经存在过 */
+};
 struct thread
   {
     /* Owned by thread.c. */
@@ -101,7 +109,12 @@ struct thread
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
 
     int ret;                            /*退出信息*/
-    struct list set_of_file_descriptors;
+    struct thread* parent_process;     /* 父进程 */
+    struct list child_process;         /* 子进程列表 */
+    struct semaphore wait_load;        /* 信号量 for 等待exec子进程load */
+    bool is_load_success;              /* exec进程是否load成功*/
+    struct semaphore wait_child_exit;     /* 信号量 for 等待子进程exit */
+    tid_t thread_wait_for_exit;            /* 等待exit的子进程tid */
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

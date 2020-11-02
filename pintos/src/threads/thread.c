@@ -174,7 +174,8 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-
+  enum intr_level old_level;
+  
   ASSERT (function != NULL);
 
   /* Allocate thread. */
@@ -187,6 +188,16 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
   t->nice=0;
   t->recent_cpu=CONVERT_TO_FIXED(0);
+
+  
+
+  struct child* child1 = (struct child*)malloc(sizeof(*child1));
+  child1->tid = tid;
+  child1->exit_status = t->ret;
+  child1->is_existed = false;
+  list_push_back (&running_thread()->child_process, &child1->elem);
+
+  old_level = intr_disable ();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -203,6 +214,7 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  intr_set_level (old_level);
   /* Add to run queue. */
   thread_unblock (t);
   if(thread_current()->priority < priority){
@@ -298,6 +310,10 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
+  while(!list_empty(&thread_current()->child_process)){
+    struct child *child1 = list_entry (list_pop_front(&thread_current()->child_process), struct child, elem);
+    free(child1);
+  }
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -488,10 +504,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->original_priority = priority; 
   list_init(&(t->locks));
-  list_init(&(t->set_of_file_descriptors));
   t->lock_waiting_for=NULL;
   t->magic = THREAD_MAGIC;
   t->ret=0;
+  sema_init(&t->wait_load,0);
+  sema_init(&t->wait_child_exit,0);
+  list_init(&t->child_process);
+  t->parent_process=running_thread();
+  t->thread_wait_for_exit=0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

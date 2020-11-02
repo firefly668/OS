@@ -48,6 +48,9 @@ process_execute (const char *orders)
   tid = thread_create (name_copy, PRI_DEFAULT, start_process, orders_copy);
   if (tid == TID_ERROR)
     palloc_free_page (orders_copy); 
+  sema_down(&thread_current()->wait_load);
+  if(thread_current()->is_load_success == false)
+    tid=-1;
   return tid;
 }
 
@@ -67,8 +70,17 @@ start_process (void *orders_)
 
   /* If load failed, quit. */
   palloc_free_page(orders);
-  if (!success) 
-    thread_exit ();
+  if (!success){
+      sema_up(&thread_current()->parent_process->wait_load);
+      thread_current()->ret=-1;
+      thread_current()->parent_process->is_load_success=false;
+      thread_exit ();
+  }
+  else 
+  {
+    thread_current()->parent_process->is_load_success=true;
+    sema_up(&thread_current()->parent_process->wait_load);
+  }
   //file_deny_write(filesys_open(file_name));
   //TODO:在线程中加入该已打开文件
   /* Start the user process by simulating a return from an
@@ -91,11 +103,24 @@ start_process (void *orders_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-    while(true){
-
+  struct list_elem *e;
+  struct child *ch=NULL;
+  struct list_elem *e1=NULL;
+  for (e = list_begin (&thread_current()->child_process); e != list_end (&thread_current()->child_process);e = list_next (e))
+  {
+    struct child *child_process_entry = list_entry (e, struct child, elem);
+    if(child_process_entry->tid == child_tid)
+    {
+      thread_current()->thread_wait_for_exit = child_process_entry->tid;
+      if(!child_process_entry->is_existed)
+        sema_down(&thread_current()->wait_child_exit);
+      list_remove(e);
+      return child_process_entry->exit_status;
     }
+  }
+  return -1;
 }
 
 /* Free the current process's resources. */

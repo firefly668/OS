@@ -1,13 +1,16 @@
 #include "userprog/syscall.h"
-#include <stdio.h>
-#include <syscall-nr.h>
+#include "userprog/process.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include <list.h>
+#include "devices/shutdown.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "lib/string.h"
+#include <stdio.h>
+#include <syscall-nr.h>
+#include <list.h>
 static void syscall_handler (struct intr_frame *);
 struct file_plus{
     int fd;
@@ -34,7 +37,20 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if(*(int *)f->esp == SYS_EXIT){
     int parameters[10];
     get_parameters(f,parameters,1);
-    exit(parameters[0]);
+    sys_exit(parameters[0]);
+  }
+  else if(*(int *)f->esp == SYS_EXEC){
+    int parameters[10];
+    get_parameters(f,parameters,1);
+    f->eax=sys_exec((char *)parameters);
+  }
+  else if(*(int *)f->esp == SYS_HALT){
+    sys_halt();
+  }
+  else if(*(int *)f->esp == SYS_WAIT){
+    int parameters[10];
+    get_parameters(f,parameters,1);
+    f->eax=process_wait(parameters[0]);
   }
 }
 void
@@ -275,4 +291,40 @@ void get_parameters(struct intr_frame *f,int *parameters,int len)
     is_valid_addr(tem);
     parameters[i] = *(int *)tem;
   }
+}
+void
+sys_halt()
+{
+  shutdown_power_off();
+}
+
+void 
+sys_exit(int exit_status1)
+{
+  printf("%s: exit(%d)\n",thread_current()->name, exit_status1);
+  struct thread* current_thread=thread_current();
+  current_thread->ret = exit_status1;
+  struct list_elem *e;
+  for (e = list_begin (&thread_current()->parent_process->child_process); e != list_end (&thread_current()->parent_process->child_process);
+        e = list_next (e))
+  {
+    struct child *child1 = list_entry (e, struct child, elem);
+    if(child1->tid == thread_current()->tid)
+    {
+      child1->is_existed = true;
+      child1->exit_status = exit_status1;
+    }
+  }
+  current_thread->ret=exit_status1;
+  if(current_thread->parent_process->thread_wait_for_exit == current_thread->tid)
+  {
+    sema_up(&current_thread->parent_process->wait_child_exit);
+  }
+  thread_exit();
+}
+
+tid_t
+sys_exec(char *cmd_line)
+{
+  /* 有点问题，先不传 */
 }
