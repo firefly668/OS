@@ -53,24 +53,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax=process_wait(parameters[0]);
   }
 }
-void
-is_valid_addr (const void *addr)
-{
-  if (addr == NULL || !is_user_vaddr (addr) || pagedir_get_page (thread_current ()->pagedir, addr) == NULL)
-    {
-      if (lock_held_by_current_thread (&filesystem_lock))
-        lock_release (&filesystem_lock);
-      exit (-1);
-    }
-}
-void
-is_valid_buffer (void *buffer, unsigned size)
-{
-  char *temp = (char *)buffer;
-  is_valid_addr ((const char *)temp);
-  temp+=size;
-  is_valid_addr ((const char *)temp);
-}
+
 bool create(const char *file, unsigned initial_size){
   lock_acquire(&filesystem_lock);
   bool create_status = filesys_create(file,initial_size);
@@ -128,6 +111,7 @@ int open(const char* filename){
     return file_plus->fd;
   }  
 }
+
 int read(int fd,void *buffer,unsigned size){
   lock_acquire(&filesystem_lock);
   if(fd == 1 || fd<0){
@@ -166,6 +150,7 @@ int read(int fd,void *buffer,unsigned size){
   //NOT_REACHED();
   exit(-1);
 }
+
 int write(int fd,const void *buffer, unsigned size)
 {
     lock_acquire(&filesystem_lock);
@@ -203,6 +188,7 @@ int write(int fd,const void *buffer, unsigned size)
     }
     exit(-1);
 }
+
 void seek(int fd,unsigned position){
   lock_acquire(&filesystem_lock);
   if(fd<=0 || fd==1){
@@ -229,6 +215,7 @@ void seek(int fd,unsigned position){
     }
   }
 }
+
 unsigned tell(int fd){
   lock_acquire(&filesystem_lock);
   if(fd<=0 || fd==1){
@@ -255,6 +242,7 @@ unsigned tell(int fd){
     }
   }
 }
+
 void close(int fd){
   lock_acquire(&filesystem_lock);
   if(fd<=0 || fd ==1)
@@ -276,6 +264,7 @@ void close(int fd){
         }
   }
 }
+
 int exit(int stauts){
   struct thread* t = thread_current();
   t->ret = stauts;
@@ -292,6 +281,7 @@ void get_parameters(struct intr_frame *f,int *parameters,int len)
     parameters[i] = *(int *)tem;
   }
 }
+
 void
 sys_halt()
 {
@@ -327,4 +317,24 @@ tid_t
 sys_exec(char *cmd_line)
 {
   /* 有点问题，先不传 */
+}
+/*地址检查，使用所有地址都需使用这些函数检查。放在最下面*/
+void
+is_valid_addr (const void *addr)
+{
+  if (addr == NULL || !is_user_vaddr (addr) || pagedir_get_page (thread_current ()->pagedir, addr) == NULL)
+    {
+      if (lock_held_by_current_thread (&filesystem_lock))
+        lock_release (&filesystem_lock);
+      exit (-1);
+    }
+}
+
+void
+is_valid_buffer (void *buffer, unsigned size)
+{
+  char *temp = (char *)buffer;
+  is_valid_addr ((const char *)temp);
+  temp+=size;
+  is_valid_addr ((const char *)temp);
 }
