@@ -44,48 +44,61 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXEC:{
       get_parameters(f,parameters,1);
       f->eax=exec((char *)parameters);
+      break;
+      
     }
     case SYS_WAIT:{
       get_parameters(f,parameters,1);
       f->eax=process_wait(parameters[0]);
+      break;
     }
     case SYS_CREATE:{
       get_parameters(f,parameters,2);
       f->eax=create((char *)parameters[0],(unsigned)parameters[1]);
+      break;
     }
     case SYS_REMOVE:{
       get_parameters(f,parameters,1);
       f->eax=remove((char *)parameters[0]);
+      break;
     }
     case SYS_OPEN:{
       get_parameters(f,parameters,1);
       f->eax=open((char *)parameters[0]);
+      break;
     }
     case SYS_FILESIZE:{
       get_parameters(f,parameters,1);
       f->eax=filesize(parameters[0]);
+      break;
     }
     case SYS_READ:{
       get_parameters(f,parameters,3);
       f->eax=read(parameters[0],(void*)parameters[1],(unsigned)parameters[2]);
+      break;
     }
     case SYS_WRITE:{
       get_parameters(f,parameters,3);
       f->eax=write(parameters[0],(void *)parameters[1],(unsigned) parameters[2]);
+      break;
     }
     case SYS_SEEK:{
       get_parameters(f,parameters,2);
       seek(parameters[0],(unsigned)parameters[1]);
+      break;
     }
     case SYS_TELL:{
       get_parameters(f,parameters,1);
       f->eax=tell(parameters[0]);
+      break;
     }
     case SYS_CLOSE:{
       get_parameters(f,parameters,1);
       close(parameters[0]);
+      break;
     }
     default:
+      //TODO:错误处理
       break;
   }
 }
