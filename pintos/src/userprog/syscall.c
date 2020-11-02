@@ -221,7 +221,7 @@ void seek(int fd,unsigned position){
       {
         struct file_plus *f = list_entry(e,struct file_plus,elem1);
         if(f->fd == fd){
-          file_Seek(f->file,(off_t)position);
+          file_seek(f->file,(off_t)position);
           lock_release(&filesystem_lock);
           return;
         }

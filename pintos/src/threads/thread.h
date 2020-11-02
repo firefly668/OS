@@ -108,6 +108,7 @@ struct thread
 
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
 
+   struct list set_of_file_descriptors;
     int ret;                            /*退出信息*/
     struct thread* parent_process;     /* 父进程 */
     struct list child_process;         /* 子进程列表 */
