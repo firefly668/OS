@@ -42,7 +42,7 @@ syscall_init (void)
 
 static void
 syscall_handler (struct intr_frame *f UNUSED) {
-  is_valid_addr(f->esp);
+  is_valid_buffer(f->esp,4);
   int parameters[3];
   switch(*(int *)f->esp){
     case SYS_HALT:{
@@ -140,6 +140,7 @@ void exit(int exit_status1){
 }
 
 tid_t exec(char *cmd_line){
+  is_valid_buffer(cmd_line,128);
   lock_acquire(&filesystem_lock);
 	char * cmd_line1 = malloc (strlen(cmd_line)+1);
   strlcpy(cmd_line1, cmd_line, strlen(cmd_line)+1);
@@ -162,6 +163,8 @@ tid_t exec(char *cmd_line){
 }
 
 bool create(const char *file, unsigned initial_size){
+
+  is_valid_buffer(file,128);
   lock_acquire(&filesystem_lock);
   bool create_status = filesys_create(file,initial_size);
   lock_release(&filesystem_lock);
@@ -169,6 +172,7 @@ bool create(const char *file, unsigned initial_size){
 }
 
 bool remove(const char *file){
+  is_valid_buffer(file,128);
   lock_acquire(&filesystem_lock);
   bool remove_status = filesys_remove(file);
   lock_release(&filesystem_lock);
@@ -178,6 +182,7 @@ bool remove(const char *file){
 /*打开一份文件，然后返回该文件的fd，如果文件打开失败则返回-1.返回的fd不能是1或0。每一个process都有自己的文件描述符的集合，我的想法是创建一个列表
 ，里面存放的是一个结构体，包含了文件名和文件fd。 */
 int open(const char* filename){
+  is_valid_buffer(filename,128);
   lock_acquire(&filesystem_lock);
   struct file* file = filesys_open(filename);
   if(file == NULL)
@@ -187,15 +192,17 @@ int open(const char* filename){
   } 
   else{
     struct thread *t = thread_current();
-    struct file_plus *file_plus;
+    struct file_plus *file_plus = malloc(sizeof(struct file_plus));
     if(list_empty(&(t->set_of_file_descriptors))){
       file_plus->fd = 2;
       file_plus->file = file;
-      list_push_back(&(t->set_of_file_descriptors),file_plus);
-    }else{
-      struct list_elem *e = list_back(&(t->set_of_file_descriptors));
-      file_plus->fd = list_entry(e,struct file_plus,elem1)->fd++;
+      list_push_back(&(t->set_of_file_descriptors),&file_plus->elem1);
+    }else{ 
+      struct list_elem * e =malloc(sizeof(struct list_elem));
+      e = list_back(&(t->set_of_file_descriptors));
+      file_plus->fd = (list_entry(e,struct file_plus,elem1)->fd)+1;
       file_plus->file = file;
+      list_push_back(&(t->set_of_file_descriptors),&file_plus->elem1);
     }
     lock_release(&filesystem_lock);
     return file_plus->fd;
@@ -223,6 +230,7 @@ int filesize(int fd){
 }
 
 int read(int fd,void *buffer,unsigned size){
+  is_valid_buffer(buffer,size);
   lock_acquire(&filesystem_lock);
   if(fd == 1 || fd<0){
     lock_release(&filesystem_lock);
@@ -239,6 +247,7 @@ int read(int fd,void *buffer,unsigned size){
     return size;
   }
   else{
+    is_valid_addr((void *)fd);
     struct thread *t = thread_current();
     struct list_elem *e;
     if(!list_size(&(t->set_of_file_descriptors))){
@@ -262,6 +271,7 @@ int read(int fd,void *buffer,unsigned size){
 }
 
 int write(int fd,const void *buffer, unsigned size){
+    is_valid_buffer(buffer,size);
     lock_acquire(&filesystem_lock);
     /* Try writing to fd 0 (stdin),  which may just fail or terminate the process with -1 exit code. */
     if(fd <= 0){
@@ -360,9 +370,10 @@ void close(int fd){
     exit(-1);
   }
   else{
+    is_valid_addr((void *)fd);
     struct thread *t =thread_current();
     struct list_elem *e;
-    for(e=list_begin(&(t->set_of_file_descriptors));e!=list_end(&(t->set_of_file_descriptors));e=list_next(&(t->set_of_file_descriptors)))
+    for(e=list_begin(&(t->set_of_file_descriptors));e!=list_end(&(t->set_of_file_descriptors));e=list_next(e))
         {
             struct file_plus *f = list_entry(e,struct file_plus,elem1);
             if(f->fd == fd){
@@ -373,18 +384,6 @@ void close(int fd){
         }
   }
 }
-
-/*获取压到栈上的系统调用的参数
-第一个参数为中断栈帧，第二个参数为存放系统调用的参数(不能使用void*)，第三个参数为该系统调用有几个参数*/
-void get_parameters(struct intr_frame *f,int *parameters,int len){
-  void *tem;
-  for(int i=0;i<len;i++){
-    tem = (int*)f->esp+i+1;
-    is_valid_addr(tem);
-    parameters[i] = *(int *)tem;
-  }
-}
-
 /*地址检查，使用所有地址都需使用这些函数检查*/
 void is_valid_addr (const void *addr){
   if (addr == NULL || !is_user_vaddr (addr) || pagedir_get_page (thread_current ()->pagedir, addr) == NULL)
@@ -397,7 +396,17 @@ void is_valid_addr (const void *addr){
 
 void is_valid_buffer (void *buffer, unsigned size){
   char *temp = (char *)buffer;
-  is_valid_addr ((const char *)temp);
+  is_valid_addr((const void *)temp);
   temp+=size;
-  is_valid_addr ((const char *)temp);
+  is_valid_addr((const void *)temp);
+}
+/*获取压到栈上的系统调用的参数
+第一个参数为中断栈帧，第二个参数为存放系统调用的参数(不能使用void*)，第三个参数为该系统调用有几个参数*/
+void get_parameters(struct intr_frame *f,int *parameters,int len){
+  void *tem;
+  for(int i=0;i<len;i++){
+    tem = (int*)f->esp+i+1;
+    is_valid_buffer(tem,4);
+    parameters[i] = *(int *)tem;
+  }
 }

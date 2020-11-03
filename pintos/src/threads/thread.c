@@ -508,11 +508,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->original_priority = priority; 
-  list_init(&(t->locks));
   list_init(&(t->set_of_file_descriptors));
+  list_init(&(t->locks));
   t->lock_waiting_for=NULL;
   t->magic = THREAD_MAGIC;
   t->ret=0;
+  t->len=2;
   sema_init(&t->wait_load,0);
   sema_init(&t->wait_child_exit,0);
   list_init(&t->child_process);

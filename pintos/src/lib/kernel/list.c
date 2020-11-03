@@ -297,7 +297,7 @@ list_back (struct list *list)
 size_t
 list_size (struct list *list)
 {
-  struct list_elem *e;
+  struct list_elem *e = malloc(sizeof (struct list_elem));
   size_t cnt = 0;
 
   for (e = list_begin (list); e != list_end (list); e = list_next (e))
