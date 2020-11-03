@@ -247,7 +247,6 @@ int read(int fd,void *buffer,unsigned size){
     return size;
   }
   else{
-    is_valid_addr((void *)fd);
     struct thread *t = thread_current();
     struct list_elem *e;
     if(!list_size(&(t->set_of_file_descriptors))){
@@ -370,7 +369,6 @@ void close(int fd){
     exit(-1);
   }
   else{
-    is_valid_addr((void *)fd);
     struct thread *t =thread_current();
     struct list_elem *e;
     for(e=list_begin(&(t->set_of_file_descriptors));e!=list_end(&(t->set_of_file_descriptors));e=list_next(e))
@@ -378,10 +376,12 @@ void close(int fd){
             struct file_plus *f = list_entry(e,struct file_plus,elem1);
             if(f->fd == fd){
                 file_close(f->file);
+                list_remove(&f->elem1);
                 lock_release(&filesystem_lock);
                 return;
             }
         }
+    exit(-1);
   }
 }
 /*地址检查，使用所有地址都需使用这些函数检查*/

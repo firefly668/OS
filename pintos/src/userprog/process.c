@@ -143,7 +143,7 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-       if(cur->file){
+      if(cur->file){
         file_allow_write(cur->file);
         file_close(cur->file);
       }

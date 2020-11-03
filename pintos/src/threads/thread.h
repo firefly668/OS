@@ -107,8 +107,7 @@ struct thread
     fixed_t recent_cpu;
 
     int64_t unblocked_tick;             /*调用timer_sleep的线程唤醒时间*/
-
-    struct file *file;                   /*用户的执行文件*/
+    struct file *file;
     struct list set_of_file_descriptors;
     int len;
     int ret;                            /*退出信息*/
