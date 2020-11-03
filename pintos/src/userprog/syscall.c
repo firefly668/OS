@@ -42,8 +42,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_EXEC:{
-      get_parameters(f,parameters,1);
-      f->eax=exec((char *)parameters);
+      is_valid_addr((int *)f->esp+1);
+      is_valid_addr(*((int *)f->esp+1));
+      f->eax=exec(*((int *)f->esp+1));
       break;
     }
     case SYS_WAIT:{
@@ -107,8 +108,10 @@ void halt()
   shutdown_power_off();
 }
 
-void exit(int exit_status1)
+void 
+exit(int exit_status1)
 {
+  //printf("%s: is exiting(%d)\n",thread_current()->name, exit_status1);
   struct thread* current_thread=thread_current();
   current_thread->ret = exit_status1;
   struct list_elem *e;
@@ -123,16 +126,31 @@ void exit(int exit_status1)
     }
   }
   current_thread->ret=exit_status1;
-  if(current_thread->parent_process->thread_wait_for_exit == current_thread->tid)
-  {
-    sema_up(&current_thread->parent_process->wait_child_exit);
-  }
   thread_exit();
 }
 
-tid_t exec(char *cmd_line)
+tid_t
+exec(char *cmd_line)
 {
-  /* 有点问题，先不传 */
+  lock_acquire(&filesystem_lock);
+	char * cmd_line1 = malloc (strlen(cmd_line)+1);
+	  strlcpy(cmd_line1, cmd_line, strlen(cmd_line)+1);
+	  
+	  char * save_ptr;
+	  cmd_line1 = strtok_r(cmd_line1," ",&save_ptr);
+
+	 struct file* file1 = filesys_open (cmd_line1);
+   if(file1==NULL)
+	  {
+	  	lock_release(&filesystem_lock);
+	  	return -1;
+	  }
+	  else
+	  {
+	  	file_close(file1);
+	  	lock_release(&filesystem_lock);
+	  	return process_execute(cmd_line);
+	  }
 }
 
 bool create(const char *file, unsigned initial_size){

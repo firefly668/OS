@@ -146,7 +146,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
       //TODO:通过线程查找其打开的文件,关闭
-      printf("%s:exit(%d)\n",cur->name,cur->ret);
+      printf("%s: exit(%d)\n",cur->name,cur->ret);
     }
 }
 

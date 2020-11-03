@@ -314,6 +314,11 @@ thread_exit (void)
     struct child *child1 = list_entry (list_pop_front(&thread_current()->child_process), struct child, elem);
     free(child1);
   }
+  if(thread_current()->parent_process->thread_wait_for_exit == thread_current()->tid)
+  {
+    sema_up(&thread_current()->parent_process->wait_child_exit);
+  }
+  
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
