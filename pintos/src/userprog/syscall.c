@@ -12,6 +12,21 @@
 #include <syscall-nr.h>
 #include <list.h>
 static void syscall_handler (struct intr_frame *);
+void halt();
+void exit(int exit_status1);
+tid_t exec(char *cmd_line);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+int open(const char* filename);
+int filesize(int fd);
+int read(int fd,void *buffer,unsigned size);
+int write(int fd,const void *buffer, unsigned size);
+void seek(int fd,unsigned position);
+unsigned tell(int fd);
+void close(int fd);
+void get_parameters(struct intr_frame *f,int *parameters,int len);
+void is_valid_addr (const void *addr);
+void is_valid_buffer (void *buffer, unsigned size);
 struct file_plus{
     int fd;
     struct file*file;
@@ -26,12 +41,10 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
-{
+syscall_handler (struct intr_frame *f UNUSED) {
   is_valid_addr(f->esp);
-  int parameters[10];
-  switch (*(int *)f->esp)
-  {
+  int parameters[3];
+  switch(*(int *)f->esp){
     case SYS_HALT:{
       halt();
       break;
@@ -42,9 +55,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
     case SYS_EXEC:{
-      is_valid_addr((int *)f->esp+1);
-      is_valid_addr(*((int *)f->esp+1));
-      f->eax=exec(*((int *)f->esp+1));
+      get_parameters(f,parameters,1);
+      f->eax=exec((char *)parameters[0]);
       break;
     }
     case SYS_WAIT:{
@@ -79,7 +91,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_WRITE:{
       get_parameters(f,parameters,3);
-      f->eax=write(parameters[0],(void *)parameters[1],(unsigned) parameters[2]);
+      f->eax=write(parameters[0],(void *)parameters[1],(unsigned)parameters[2]);
       break;
     }
     case SYS_SEEK:{
@@ -97,20 +109,18 @@ syscall_handler (struct intr_frame *f UNUSED)
       close(parameters[0]);
       break;
     }
-    default:
-      //TODO:错误处理
+    default:{
+      exit(-1);
       break;
+    }
   }
 }
 
-void halt()
-{
+void halt(){
   shutdown_power_off();
 }
 
-void 
-exit(int exit_status1)
-{
+void exit(int exit_status1){
   //printf("%s: is exiting(%d)\n",thread_current()->name, exit_status1);
   struct thread* current_thread=thread_current();
   current_thread->ret = exit_status1;
@@ -129,28 +139,26 @@ exit(int exit_status1)
   thread_exit();
 }
 
-tid_t
-exec(char *cmd_line)
-{
+tid_t exec(char *cmd_line){
   lock_acquire(&filesystem_lock);
 	char * cmd_line1 = malloc (strlen(cmd_line)+1);
-	  strlcpy(cmd_line1, cmd_line, strlen(cmd_line)+1);
-	  
-	  char * save_ptr;
-	  cmd_line1 = strtok_r(cmd_line1," ",&save_ptr);
+  strlcpy(cmd_line1, cmd_line, strlen(cmd_line)+1);
+  
+  char * save_ptr;
+  cmd_line1 = strtok_r(cmd_line1," ",&save_ptr);
 
-	 struct file* file1 = filesys_open (cmd_line1);
-   if(file1==NULL)
-	  {
-	  	lock_release(&filesystem_lock);
-	  	return -1;
-	  }
-	  else
-	  {
-	  	file_close(file1);
-	  	lock_release(&filesystem_lock);
-	  	return process_execute(cmd_line);
-	  }
+  struct file* file1 = filesys_open (cmd_line1);
+  if(file1==NULL)
+  {
+    lock_release(&filesystem_lock);
+    return -1;
+  }
+  else
+  {
+    file_close(file1);
+    lock_release(&filesystem_lock);
+    return process_execute(cmd_line);
+  }
 }
 
 bool create(const char *file, unsigned initial_size){
@@ -253,8 +261,7 @@ int read(int fd,void *buffer,unsigned size){
   exit(-1);
 }
 
-int write(int fd,const void *buffer, unsigned size)
-{
+int write(int fd,const void *buffer, unsigned size){
     lock_acquire(&filesystem_lock);
     /* Try writing to fd 0 (stdin),  which may just fail or terminate the process with -1 exit code. */
     if(fd <= 0){
@@ -369,8 +376,7 @@ void close(int fd){
 
 /*获取压到栈上的系统调用的参数
 第一个参数为中断栈帧，第二个参数为存放系统调用的参数(不能使用void*)，第三个参数为该系统调用有几个参数*/
-void get_parameters(struct intr_frame *f,int *parameters,int len)
-{
+void get_parameters(struct intr_frame *f,int *parameters,int len){
   void *tem;
   for(int i=0;i<len;i++){
     tem = (int*)f->esp+i+1;
@@ -380,8 +386,7 @@ void get_parameters(struct intr_frame *f,int *parameters,int len)
 }
 
 /*地址检查，使用所有地址都需使用这些函数检查*/
-void is_valid_addr (const void *addr)
-{
+void is_valid_addr (const void *addr){
   if (addr == NULL || !is_user_vaddr (addr) || pagedir_get_page (thread_current ()->pagedir, addr) == NULL)
     {
       if (lock_held_by_current_thread (&filesystem_lock))
@@ -390,8 +395,7 @@ void is_valid_addr (const void *addr)
     }
 }
 
-void is_valid_buffer (void *buffer, unsigned size)
-{
+void is_valid_buffer (void *buffer, unsigned size){
   char *temp = (char *)buffer;
   is_valid_addr ((const char *)temp);
   temp+=size;
