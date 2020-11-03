@@ -81,8 +81,6 @@ start_process (void *orders_)
     thread_current()->parent_process->is_load_success=true;
     sema_up(&thread_current()->parent_process->wait_load);
   }
-  //file_deny_write(filesys_open(file_name));
-  //TODO:在线程中加入该已打开文件
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -145,7 +143,10 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-      //TODO:通过线程查找其打开的文件,关闭
+       if(cur->file){
+        file_allow_write(cur->file);
+        file_close(cur->file);
+      }
       printf("%s: exit(%d)\n",cur->name,cur->ret);
     }
 }
@@ -348,10 +349,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
-
+  file_deny_write(file);
+  t->file=file;
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
