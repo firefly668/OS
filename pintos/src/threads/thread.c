@@ -177,19 +177,20 @@ thread_create (const char *name, int priority,
   enum intr_level old_level;
   
   ASSERT (function != NULL);
-
+  int threadNum=list_size(&all_list);
+  if(threadNum>=35){
+    return -1;
+  }
   /* Allocate thread. */
   t = palloc_get_page (PAL_ZERO);
   if (t == NULL)
     return TID_ERROR;
-
+  
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->nice=0;
   t->recent_cpu=CONVERT_TO_FIXED(0);
-
-  
 
   struct child* child1 = (struct child*)malloc(sizeof(*child1));
   child1->tid = tid;
@@ -220,7 +221,6 @@ thread_create (const char *name, int priority,
   if(thread_current()->priority < priority){
     thread_yield();
   }
-  thread_yield();
   return tid;
 }
 

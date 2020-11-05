@@ -17,7 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "syscall.h"
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -38,7 +38,6 @@ process_execute (const char *orders)
     return TID_ERROR;
   strlcpy (orders_copy, orders, PGSIZE);
 
-
   char *name_copy,*next = NULL;
   name_copy = malloc (strlen (orders) + 1);
   strlcpy(name_copy, orders, strlen(orders) + 1);
@@ -46,8 +45,10 @@ process_execute (const char *orders)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (name_copy, PRI_DEFAULT, start_process, orders_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (orders_copy); 
+  if (tid == TID_ERROR){
+    palloc_free_page (orders_copy);
+    return tid;
+  } 
   sema_down(&thread_current()->wait_load);
   if(thread_current()->is_load_success == false)
     tid=-1;
@@ -112,8 +113,10 @@ process_wait (tid_t child_tid)
     if(child_process_entry->tid == child_tid)
     {
       thread_current()->thread_wait_for_exit = child_process_entry->tid;
-      if(!child_process_entry->is_existed)
+      if(!child_process_entry->is_existed){
+        //printf("%d\n",thread_current()->wait_child_exit.value);
         sema_down(&thread_current()->wait_child_exit);
+      }
       list_remove(e);
       return child_process_entry->exit_status;
     }
@@ -147,6 +150,15 @@ process_exit (void)
         file_allow_write(cur->file);
         file_close(cur->file);
       }
+      //lock_acquire(&filesystem_lock);
+      struct list_elem *e;
+      for(e=list_begin(&(cur->set_of_file_descriptors));e!=list_end(&(cur->set_of_file_descriptors));e=list_next(&(cur->set_of_file_descriptors)))
+      {
+        struct file_plus *f = list_entry(e,struct file_plus,elem1);
+        file_close(f->file);
+        list_remove(&f->elem1);
+      }
+      //lock_release(&filesystem_lock);
       printf("%s: exit(%d)\n",cur->name,cur->ret);
     }
 }

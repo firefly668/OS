@@ -10,7 +10,6 @@
 #include "lib/string.h"
 #include <stdio.h>
 #include <syscall-nr.h>
-#include <list.h>
 static void syscall_handler (struct intr_frame *);
 void halt();
 void exit(int exit_status1);
@@ -27,12 +26,6 @@ void close(int fd);
 void get_parameters(struct intr_frame *f,int *parameters,int len);
 void is_valid_addr (const void *addr);
 void is_valid_buffer (void *buffer, unsigned size);
-struct file_plus{
-    int fd;
-    struct file*file;
-    struct list_elem elem1;
-};
-struct lock filesystem_lock;
 void
 syscall_init (void) 
 {
@@ -123,7 +116,6 @@ void halt(){
 void exit(int exit_status1){
   //printf("%s: is exiting(%d)\n",thread_current()->name, exit_status1);
   struct thread* current_thread=thread_current();
-  current_thread->ret = exit_status1;
   struct list_elem *e;
   for (e = list_begin (&thread_current()->parent_process->child_process); e != list_end (&thread_current()->parent_process->child_process);
         e = list_next (e))
@@ -152,12 +144,14 @@ tid_t exec(char *cmd_line){
   if(file1==NULL)
   {
     lock_release(&filesystem_lock);
+    free(cmd_line1);
     return -1;
   }
   else
   {
     file_close(file1);
     lock_release(&filesystem_lock);
+    free(cmd_line1);
     return process_execute(cmd_line);
   }
 }
@@ -371,17 +365,15 @@ void close(int fd){
   else{
     struct thread *t =thread_current();
     struct list_elem *e;
-    for(e=list_begin(&(t->set_of_file_descriptors));e!=list_end(&(t->set_of_file_descriptors));e=list_next(e))
-        {
+    for(e=list_begin(&(t->set_of_file_descriptors));e!=list_end(&(t->set_of_file_descriptors));e=list_next(e)){
             struct file_plus *f = list_entry(e,struct file_plus,elem1);
             if(f->fd == fd){
                 file_close(f->file);
                 list_remove(&f->elem1);
-                lock_release(&filesystem_lock);
-                return;
             }
         }
-    exit(-1);
+    lock_release(&filesystem_lock);
+    return;
   }
 }
 /*地址检查，使用所有地址都需使用这些函数检查*/

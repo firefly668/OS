@@ -6,6 +6,16 @@
 #include <stdint.h>
 #include "threads/fixed_point.h"
 #include "threads/synch.h"
+
+
+struct file_plus{
+    int fd;
+    struct file*file;
+    struct list_elem elem1;
+};
+struct lock filesystem_lock;
+
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
